@@ -5,6 +5,7 @@ import img2pdf
 from bs4 import BeautifulSoup
 from scrape import getComicList
 from scrape import scrape_img
+from scrape import searchComic
 import requests
 import pandas as pd
 from gemini import geminiSearch
@@ -28,9 +29,11 @@ def display_reader_mode():
         st.info(f"Memuat {len(st.session_state.chapter_images)} halaman.")
         
         for i, url in enumerate(st.session_state.chapter_images):
-            img = url
+            # img = url # Variabel 'img' tidak digunakan, bisa dihapus
             st.image(url, caption=f"Halaman {i+1}")
-    col1, col2 = st.columns([1, 2])
+    
+    # Col1 dan Col2 tidak digunakan di sini, bisa dihapus atau diimplementasikan
+    # col1, col2 = st.columns([1, 2])
     # di sini nanti buat next sama prev chapter malas
         
     
@@ -55,10 +58,10 @@ def getChapters(manga):
 
         if st.session_state['read_history'].sizeStack() > 0:
              if st.button("⬅️ Kembali ke Sebelumnya (POP)", key="btn_pop", use_container_width=True):
-                st.session_state['read_history'].pop()
-                st.warning("Chapter dihapus dari riwayat (POP).")
-                st.rerun()
-                
+                 st.session_state['read_history'].pop()
+                 st.warning("Chapter dihapus dari riwayat (POP).")
+                 st.rerun()
+                 
         st.markdown("---")
         if st.button("⬅️ Kembali ke Daftar Komik", use_container_width=True, type="primary"):
             st.session_state.selected_manga = None
@@ -67,7 +70,7 @@ def getChapters(manga):
             st.rerun()
         
     try:
-        resp = requests.get(manga["link"], headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        resp = requests.get(manga["link"], headers={"User-Agent": "Mozilla/5.0"}, timeout=30) 
         if resp.status_code != 200:
             st.error("Gagal mengambil halaman detail komik.")
             return
@@ -82,6 +85,7 @@ def getChapters(manga):
             ch_date = ch.select_one("span.chapter-release-date i")
             ch_date = ch_date.get_text(strip=True) if ch_date else ""
             chapters.append({"title": ch_title, "link": ch_link, "date": ch_date}) 
+        
         col1, col2 = st.columns([1, 2])
         with col1:
             st.image(manga["image"], width=300)
@@ -91,15 +95,14 @@ def getChapters(manga):
             st.markdown(f"🔗 [Buka di Browser]({manga['link']})")
 
         st.markdown("---")
-        st.markdown("### 📜 Daftar Chapter")
-
+        st.markdown("<h2 style='text-align: center; color: red; padding-bottom: 2em;'>📜 Daftar Chapter</h2>", unsafe_allow_html= True)
         if not chapters:
             st.warning("Belum ada chapter yang ditemukan.")
         else:
             visible_chapters = chapters[:st.session_state.chapters_limit]
             
             for i, ch in enumerate(visible_chapters):
-                col_title, col_read, col_push = st.columns([3, 1.5, 1.5])
+                col_title, col_read= st.columns([3, 1.5])
                 
                 with col_title:
                     st.markdown(
@@ -109,9 +112,13 @@ def getChapters(manga):
                     
                 with col_read:
                     if st.button("▶️ Baca", key=f"btn_read_{ch['link']}", use_container_width=True):
-                        image_urls = scrape_img(ch)
+                        # Panggil scrape_img
+                        with st.spinner(f"Mengambil gambar untuk {ch['title']}..."):
+                            image_urls = scrape_img(ch)
                         
                         if image_urls:
+                            st.session_state['read_history'].push(ch['title'])
+                            st.success("Ditambahkan ke riwayat (PUSH)!")
                             st.session_state.chapter_images = image_urls
                             st.session_state.current_chapter_title = ch['title']
                             st.session_state.is_reading = True
@@ -120,16 +127,11 @@ def getChapters(manga):
                         else:
                             st.error("Gagal memuat gambar chapter.")
 
-                with col_push:
-                    if st.button("✅ PUSH (Riwayat)", key=f"btn_push_{ch['link']}", use_container_width=True):
-                        st.session_state['read_history'].push(ch['title'])
-                        st.success("Ditambahkan ke riwayat (PUSH)!")
-                        st.rerun() 
-
             if st.session_state.chapters_limit < len(chapters):
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("⬇️ Tampilkan Lebih Banyak Chapter", use_container_width=True):
-                    st.session_state.chapters_limit += len(chapters) - st.session_state.chapters_limit
+                    # Set limit menjadi semua chapter yang tersedia
+                    st.session_state.chapters_limit = len(chapters) 
                     st.rerun()
             else:
                 st.info("✅ Semua chapter sudah ditampilkan.")
@@ -143,94 +145,102 @@ def convertPDF(mangaDirectory, st_status):
     pass
 
 def display_manga_grid():
-    prompt = st.sidebar.text_input("Tanya Gemini")
-    if prompt:
-            geminiSearch(prompt)
+    mangas = []
+    current_page = st.session_state.current_page
+    current_filter = st.session_state.current_filter
+    order_by = st.session_state.order_by
+    
+    search = st.sidebar.text_input("Pencarian dan Gemini", placeholder="e.g: Beri Aku rekomendasi, deskripsi komik")
+    
+    if search:
+        if "rekomendasi" in search.lower() or "deskripsi" in search.lower():
+            geminiSearch(search)
+            # Jika Gemini dipanggil, tidak ada komik yang diambil, jadi mangas tetap []
+        else:
+            with st.spinner(f"Mencari komik dengan kata kunci: '{search}'..."):
+                mangas = searchComic(search)
+            # Karena ini adalah halaman pencarian, kita tidak menampilkan navigasi halaman
+            # current_page tetap, tapi navigasi dihilangkan
     else:
         st.sidebar.header("Filter Komik")
         filter_type = st.sidebar.selectbox(
-                "Pilih jenis komik:",
-                ["Semua", "manga", "manhwa", "manhua"],
-                key="selected_filter"
+            "Pilih jenis komik:",
+            ["Semua", "manga", "manhwa", "manhua"],
+            key="selected_filter"
         )
+        order_type = "latest" 
         if filter_type != 'Semua':
-                order_type = st.sidebar.selectbox(
-                        "Order By:",
-                        ["latest", "alphabet", "rating", "trending", "views", "new-manga"],
-                        key="selected_order"
-                )
-    if 'has_fetched_once' not in st.session_state:
-        st.session_state.has_fetched_once = False
-
-    manual_fetch = st.sidebar.button("📥 Ambil Daftar Komik", type="primary")
-    
-    if not st.session_state.has_fetched_once or manual_fetch:
-        st.session_state.current_page = 1 
-        st.session_state.current_filter = None if filter_type == "Semua" else filter_type
-        if st.session_state.current_filter is not None:
-            st.session_state.order_by = None if order_type == "latest" else order_type
-        st.session_state.search_active = True
-        st.session_state.has_fetched_once = True
-        st.rerun()
-
-    if st.session_state.search_active:
-        current_page = st.session_state.current_page
-        current_filter = st.session_state.current_filter
-        if current_filter != None:
-                order_by = st.session_state.order_by
+            order_type = st.sidebar.selectbox(
+                "Order By:",
+                ["latest", "alphabet", "rating", "trending", "views", "new-manga"],
+                key="selected_order"
+            )
         
-        with st.spinner(f"Mengambil data halaman {current_page} untuk '{current_filter or 'Semua'}'..."):
-            if current_filter:
+        if 'has_fetched_once' not in st.session_state:
+            st.session_state.has_fetched_once = False
+
+        manual_fetch = st.sidebar.button("📥 Ambil Daftar Komik", type="primary")
+        
+        if not st.session_state.has_fetched_once or manual_fetch:
+            st.session_state.current_page = 1 
+            st.session_state.current_filter = None if filter_type == "Semua" else filter_type
+            
+            if st.session_state.current_filter is not None:
+                st.session_state.order_by = None if order_type == "latest" else order_type
+            else:
+                st.session_state.order_by = None 
+
+            st.session_state.search_active = True
+            st.session_state.has_fetched_once = True
+            st.rerun()
+
+        if st.session_state.search_active and not search: 
+            current_page = st.session_state.current_page
+            current_filter = st.session_state.current_filter
+            order_by = st.session_state.order_by
+
+            with st.spinner(f"Mengambil data halaman {current_page} untuk '{current_filter or 'Semua'}'..."):
                 mangas = getComicList(current_filter, current_page, order_by)
-            else:
-                mangas = getComicList(current_filter, current_page)
-            
-            if mangas:
-                st.success(f"Berhasil mengambil {len(mangas)} komik (Halaman {current_page})")
-                cols = st.columns(4)
-                for i, manga in enumerate(mangas):
-                    with cols[i % 4]:
-                        with st.container(border=True):
-                            st.image(manga["image"], width= "stretch")
-                            st.markdown(
-                                f"<p style='text-align: center; font-weight: bold; height: 3em; overflow: hidden;'>"
-                                f"{manga['title']}"
-                                f"</p>", 
-                                unsafe_allow_html=True
-                            )
-                            print(current_filter)
-                            if st.button(f"Pilih {current_filter} Ini" if current_filter != None else "Pilih komik Ini", key=manga['slug'], use_container_width=True):
-                                st.session_state.selected_manga = manga
-                                st.rerun() 
-            else:
-                st.warning("Tidak ada komik ditemukan di halaman ini.")
-                
-            st.divider()
-            col1, col2, col3 = st.columns([1, 2, 1])
-            
-            with col1:
-                if st.button("⬅️ Halaman Sebelumnya", use_container_width=True, disabled=(current_page == 1)):
-                    st.session_state.current_page -= 1
-                    st.rerun()
-            
-            with col2:
-                st.markdown(f"<h3 style='text-align: center;'>Halaman {current_page}</h3>", unsafe_allow_html=True)
-            
-            with col3:
-                if st.button("Halaman Berikutnya ➡️", use_container_width=True, disabled=(not mangas)):
-                    st.session_state.current_page += 1
-                    st.rerun()
-
-def display_downloader_ui():
-    st.header("Download ")
-    st.info("Sek-sek masih development le")
-
-    manga = st.session_state.selected_manga
-    st.sidebar.image(manga['image'])
-    st.sidebar.markdown(f"**{manga['title']}**")
-    if st.sidebar.button("⬅️ Kembali ke Daftar Komik"):
-        st.session_state.selected_manga = None
-        st.rerun()
+    
+    if mangas:
+        st.success(f"Berhasil mengambil {len(mangas)} komik (Halaman {current_page})")
+        cols = st.columns(4)
+        for i, manga in enumerate(mangas):
+            with cols[i % 4]:
+                with st.container(border=True):
+                    st.image(manga["image"], width= "stretch")
+                    st.markdown(
+                        f"<p style='text-align: center; font-weight: bold; height: 3em; overflow: hidden;'>"
+                        f"{manga['title']}"
+                        f"</p>", 
+                        unsafe_allow_html=True
+                    )
+                    
+                    button_text = f"Pilih {current_filter.capitalize()}" if current_filter else "Pilih Komik Ini"
+                    if st.button(button_text, key=manga['slug'], use_container_width=True):
+                        st.session_state.selected_manga = manga
+                        st.rerun() 
+    else:
+        if not ("rekomendasi" in search.lower() or "deskripsi" in search.lower()):
+            st.warning("Tidak ada komik ditemukan.")
+        
+    st.divider()
+    
+    if not search:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col1:
+            if st.button("⬅️ Halaman Sebelumnya", use_container_width=True, disabled=(current_page == 1)):
+                st.session_state.current_page -= 1
+                st.rerun()
+        
+        with col2:
+            st.markdown(f"<h3 style='text-align: center;'>Halaman {current_page}</h3>", unsafe_allow_html=True)
+        
+        with col3:
+            if st.button("Halaman Berikutnya ➡️", use_container_width=True, disabled=(not mangas)):
+                st.session_state.current_page += 1
+                st.rerun()
 
 def main():
     st.set_page_config(page_title="Duta Comic", layout="wide")
@@ -247,6 +257,8 @@ def main():
         st.session_state.order_by = None
     if 'search_active' not in st.session_state:
         st.session_state.search_active = False 
+    if 'keyword_search' not in st.session_state:
+        st.session_state.keywoard_search = None
         
     if 'is_reading' not in st.session_state: 
         st.session_state.is_reading = False

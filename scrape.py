@@ -85,3 +85,50 @@ def scrape_img(link, status = True):
     except Exception as e:
         st.error(f"❌ Error saat scraping konten chapter: {e}")
         return []
+def searchComic(keyword):
+    import requests
+    from bs4 import BeautifulSoup
+    import streamlit as st
+
+    try:
+        url = f"{BASE_API}?s={keyword.replace(' ', '+')}&post_type=wp-manga"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            st.warning("Gagal mengakses halaman search.")
+            return []
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        comics = []
+
+        results = soup.select("div.c-tabs-item__content")
+        if not results:
+            return []
+
+        for item in results:
+            title_el = item.select_one("h3 a")
+            img_el = item.select_one("img")
+
+            if not title_el or not img_el:
+                continue
+
+            title_text = title_el.get_text(strip=True)
+
+            if keyword.lower() not in title_text.lower():
+                continue
+
+            link = title_el["href"]
+            slug = link.split("/manga/")[-1].strip("/")
+
+            comics.append({
+                "title": title_text,
+                "link": link,
+                "image": img_el.get("data-src") or img_el.get("src"),
+                "slug": slug
+            })
+
+        return comics
+
+    except Exception as e:
+        st.error(f"Error search: {e}")
+        return []
