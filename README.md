@@ -1,4 +1,4 @@
-# Last-Semester-Project
+# DUTA COMIC READER AND DOWLOADER
 
 #Base URL for scrapping
 Source : 'https://www.mangaread.org/'
