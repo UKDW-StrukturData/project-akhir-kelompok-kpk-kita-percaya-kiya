@@ -63,7 +63,7 @@ def getComicList(filter=None, page=1, order= None):
         return []
 
 def scrape_img(link, status = True):
-    ch_link = link["link"]
+    ch_link = link
     
     try:
         resp = requests.get(ch_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
