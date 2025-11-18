@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import re
-import img2pdf
+# import img2pdf
 from bs4 import BeautifulSoup
 from scrape import getComicList
 from scrape import scrape_img
@@ -31,7 +31,12 @@ def display_reader_mode():
         for i, url in enumerate(st.session_state.chapter_images):
             # img = url # Variabel 'img' tidak digunakan, bisa dihapus
             st.image(url, caption=f"Halaman {i+1}")
-    
+    selected = st.selectbox(
+    st.session_state.current_chapter_title, st.session_state.chapterlist,            
+    index=st.session_state.chapterlist.index(st.session_state.current_chapter_title), label_visibility="collapsed")
+    st.session_state.current_chapter_title = selected
+    st.session_state.chapter_images=scrape_img(st.session_state.chapterlink[st.session_state.current_chapter_title])
+    st.session_state['read_history'].push(st.session_state.current_chapter_title)
     # Col1 dan Col2 tidak digunakan di sini, bisa dihapus atau diimplementasikan
     # col1, col2 = st.columns([1, 2])
     # di sini nanti buat next sama prev chapter malas
@@ -85,7 +90,8 @@ def getChapters(manga):
             ch_date = ch.select_one("span.chapter-release-date i")
             ch_date = ch_date.get_text(strip=True) if ch_date else ""
             chapters.append({"title": ch_title, "link": ch_link, "date": ch_date}) 
-        
+            st.session_state.chapterlist.append(ch_title)
+            st.session_state.chapterlink.update({ch_title: ch_link})
         col1, col2 = st.columns([1, 2])
         with col1:
             st.image(manga["image"], width=300)
@@ -114,14 +120,14 @@ def getChapters(manga):
                     if st.button("▶️ Baca", key=f"btn_read_{ch['link']}", use_container_width=True):
                         # Panggil scrape_img
                         with st.spinner(f"Mengambil gambar untuk {ch['title']}..."):
-                            image_urls = scrape_img(ch)
+                            image_urls = scrape_img(ch['link'])
                         
                         if image_urls:
                             st.session_state['read_history'].push(ch['title'])
                             st.success("Ditambahkan ke riwayat (PUSH)!")
+                            st.session_state.is_reading = True
                             st.session_state.chapter_images = image_urls
                             st.session_state.current_chapter_title = ch['title']
-                            st.session_state.is_reading = True
                             print(st.session_state.current_chapter_title)
                             st.rerun() 
                         else:
@@ -255,6 +261,10 @@ def main():
         st.session_state.current_filter = None
     if 'order_by' not in st.session_state:
         st.session_state.order_by = None
+    if 'chapterlist' not in st.session_state:
+        st.session_state.chapterlist = []
+    if 'chapterlink' not in st.session_state:
+        st.session_state.chapterlink = {}
     if 'search_active' not in st.session_state:
         st.session_state.search_active = False 
     if 'keyword_search' not in st.session_state:
