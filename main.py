@@ -11,7 +11,7 @@ import pandas as pd
 from gemini import geminiSearch
 import chapterStack
 import chapterLinkedList as LL
-
+# coba
 def display_reader_mode():
     with st.sidebar:
         st.header(f"📖 Membaca: {st.session_state['current_chapter_title']}")
