@@ -36,7 +36,7 @@ def display_reader_mode():
     index=st.session_state.chapterlist.index(st.session_state.current_chapter_title), label_visibility="collapsed")
     st.session_state.current_chapter_title = selected
     st.session_state.chapter_images=scrape_img(st.session_state.chapterlink[st.session_state.current_chapter_title])
-    st.session_state['read_history'].push(st.session_state.current_chapter_title)
+    st.session_state['read_history'].push(st.session_state.current_chapter_title) 
     # Col1 dan Col2 tidak digunakan di sini, bisa dihapus atau diimplementasikan
     # col1, col2 = st.columns([1, 2])
     # di sini nanti buat next sama prev chapter malas
