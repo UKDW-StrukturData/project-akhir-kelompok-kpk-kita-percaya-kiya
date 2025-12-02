@@ -1,7 +1,11 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
+
 BASE_API = 'https://www.mangaread.org/'
+
+if 'current_chapter_link' not in st.session_state:
+    st.session_state['current_chapter_link'] = None
 
 def getComicList(filter=None, page=1, order= None):
     try:
@@ -10,7 +14,7 @@ def getComicList(filter=None, page=1, order= None):
         else:
             base_url = f"{BASE_API}"
         
-        print(filter)
+        # print(filter)
         if page == 1:
             url = base_url
         else:
@@ -32,7 +36,7 @@ def getComicList(filter=None, page=1, order= None):
             for item in soup.select("div.page-item-detail"):
                 title_link_elem = item.select_one("div.item-summary h3.h5 a")
                 img_elem = item.select_one("div.item-thumb a img")
-
+                print(img_elem, end="\n")
                 if not (title_link_elem and img_elem):
                     continue
 
@@ -42,14 +46,17 @@ def getComicList(filter=None, page=1, order= None):
                     slug = link.split('/manga/')[1].strip('/')
                 except IndexError:
                     continue 
-
+                
                 comics.append({
                     "title": title_link_elem.get_text(strip=True),
                     "link": link,
-                    "image": img_elem.get("data-src") or img_elem.get("src"),
+                    "image": img_elem.get("src"),
                     "slug": slug
                 })
-            
+                print(img_elem)
+                # print(comics)
+
+                
             if not comics:
                 st.warning(f"Tidak ada komik ditemukan di halaman {page}. Mungkin ini halaman terakhir.")
                 return []
@@ -63,6 +70,7 @@ def getComicList(filter=None, page=1, order= None):
         return []
 
 def scrape_img(link, status = True):
+    st.session_state['current_chapter_link'] = link
     ch_link = link
     
     try:
@@ -75,21 +83,18 @@ def scrape_img(link, status = True):
         
         if reading_content:
             img_tags = reading_content.find_all('img')
-            print(img_tags)
+            # print(img_tags)
             for img in img_tags:
                 url = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
                 if url and url.strip():
                     image_urls.append(url.strip())
-        
+        else:
+            return None
         return image_urls
     except Exception as e:
         st.error(f"❌ Error saat scraping konten chapter: {e}")
         return []
 def searchComic(keyword):
-    import requests
-    from bs4 import BeautifulSoup
-    import streamlit as st
-
     try:
         url = f"{BASE_API}?s={keyword.replace(' ', '+')}&post_type=wp-manga"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -104,7 +109,7 @@ def searchComic(keyword):
         results = soup.select("div.c-tabs-item__content")
         if not results:
             return []
-
+        
         for item in results:
             title_el = item.select_one("h3 a")
             img_el = item.select_one("img")
@@ -119,7 +124,6 @@ def searchComic(keyword):
 
             link = title_el["href"]
             slug = link.split("/manga/")[-1].strip("/")
-
             comics.append({
                 "title": title_text,
                 "link": link,
@@ -131,4 +135,31 @@ def searchComic(keyword):
 
     except Exception as e:
         st.error(f"Error search: {e}")
+        return []
+def next_chapter():
+    pass
+def prev_chapter():
+    cur_link = st.session_state['current_chapter_link']
+    
+    try:
+        resp = requests.get(cur_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        resp.raise_for_status()
+        
+        soup = BeautifulSoup(resp.text, "html.parser")
+        image_urls = []
+        reading_content = soup.select_one('div.nav-previous')
+        print(reading_content)
+        if reading_content:
+            print(reading_content)
+            # img_tags = reading_content.find_all('img')
+            # # print(img_tags)
+            # for img in img_tags:
+            #     url = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+            #     if url and url.strip():
+            #         image_urls.append(url.strip())
+        else:
+            return None
+        return image_urls
+    except Exception as e:
+        st.error(f"❌ Error saat scraping konten chapter: {e}")
         return []
