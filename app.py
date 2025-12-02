@@ -260,6 +260,15 @@ def display_manga_grid():
                         f"</p>", 
                         unsafe_allow_html=True
                     )
+                    try:
+                        rating_val = float(manga.get("rating", 0))
+                    except (ValueError, TypeError):
+                        rating_val = 0
+                    
+                    full_stars = int(rating_val)
+                    empty_stars = 5 - full_stars
+                    stars_str = "⭐" * full_stars + "☆" * empty_stars
+                    st.markdown(f"<div style='text-align: center; color: orange;'>{stars_str} <small>({rating_val})</small></div>", unsafe_allow_html=True)
                     
                     button_text = f"Pilih {st.session_state.current_filter.capitalize()}" if st.session_state.current_filter else "Pilih Komik Ini"
                     if st.button(button_text, key=manga['slug'], use_container_width=True):

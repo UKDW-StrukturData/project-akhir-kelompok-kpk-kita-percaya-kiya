@@ -47,11 +47,17 @@ def getComicList(filter=None, page=1, order= None):
                 except IndexError:
                     continue 
                 
+                rating_elem = item.select_one("div.post-total-rating span")
+                if not rating_elem:
+                    rating_elem = "N/A"
+
+                rating_text = float(rating_elem.get_text(strip=True) if rating_elem else "N/A")
                 comics.append({
                     "title": title_link_elem.get_text(strip=True),
                     "link": link,
                     "image": img_elem.get("src"),
-                    "slug": slug
+                    "slug": slug,
+                    "rating": rating_text 
                 })
                 print(img_elem)
                 # print(comics)
@@ -124,13 +130,19 @@ def searchComic(keyword):
 
             link = title_el["href"]
             slug = link.split("/manga/")[-1].strip("/")
+            rating_elem = item.select_one("div.post-total-rating span")
+            if not rating_elem:
+                rating_elem = "N/A"
+            
+            rating_text = float(rating_elem.get_text(strip=True) if rating_elem else "N/A")
             comics.append({
                 "title": title_text,
                 "link": link,
                 "image": img_el.get("data-src") or img_el.get("src"),
-                "slug": slug
+                "slug": slug,
+                "rating": rating_text
             })
-
+            print(rating_text)
         return comics
 
     except Exception as e:
