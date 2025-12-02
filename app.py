@@ -11,6 +11,7 @@ from ADT import chapterStack
 from ADT import chapterLinkedList as LL
 from script import login as lg
 from script import registration as rg
+import profile as pr
 
 st.set_page_config(page_title='Duta Comic', 
                    layout="wide", 
@@ -190,8 +191,13 @@ def display_manga_grid():
             st.session_state.chapter_images = []
             st.session_state.read_history = chapterStack.stack()
             st.session_state.has_fetched_once = False
+            st.session_state.showing_profile = False
             st.rerun()
-            
+        
+        if st.button("Profile", use_container_width=True):
+            st.session_state.showing_profile = True
+            st.rerun()
+    
     search = st.sidebar.text_input("Pencarian dan Gemini", placeholder="e.g: Beri Aku rekomendasi...")
     
     if search:
@@ -260,6 +266,7 @@ def display_manga_grid():
                         f"</p>", 
                         unsafe_allow_html=True
                     )
+                    
                     try:
                         rating_val = float(manga.get("rating", 0))
                     except (ValueError, TypeError):
@@ -269,7 +276,7 @@ def display_manga_grid():
                     empty_stars = 5 - full_stars
                     stars_str = "⭐" * full_stars + "☆" * empty_stars
                     st.markdown(f"<div style='text-align: center; color: orange;'>{stars_str} <small>({rating_val})</small></div>", unsafe_allow_html=True)
-                    
+
                     button_text = f"Pilih {st.session_state.current_filter.capitalize()}" if st.session_state.current_filter else "Pilih Komik Ini"
                     if st.button(button_text, key=manga['slug'], use_container_width=True):
                         st.session_state.selected_manga = manga
@@ -329,9 +336,16 @@ def main():
     if 'chapters_limit' not in st.session_state: st.session_state.chapters_limit = 10
     if 'read_history' not in st.session_state: st.session_state['read_history'] = chapterStack.stack()
     if 'has_fetched_once' not in st.session_state: st.session_state.has_fetched_once = False
+    if 'showing_profile' not in st.session_state: st.session_state.showing_profile = False
         
     if st.session_state.is_reading:
-        display_reader_mode()     
+        display_reader_mode() 
+    elif st.session_state.showing_profile:
+        # LOGIKA TAMPILAN PROFILE
+        if st.sidebar.button("Back to Home"):
+            st.session_state.showing_profile = False
+            st.rerun()
+        pr.show_profile()
     elif st.session_state.selected_manga:
         getChapters(st.session_state.selected_manga)
     else:
