@@ -11,8 +11,12 @@ from ADT import chapterStack
 from ADT import chapterLinkedList as LL
 from script import login as lg
 from script import registration as rg
+from script import script as sc
 import profile as pr
+from io import BytesIO
 
+
+print(True)
 st.set_page_config(page_title='Duta Comic', 
                    layout="wide", 
                    page_icon="assets/logo_duta_comic[1].png")
@@ -57,9 +61,23 @@ def display_reader_mode():
         st.error("Gagal menampilkan konten. Daftar gambar kosong.")
     else:
         st.info(f"Memuat {len(st.session_state.chapter_images)} halaman.")
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.mangaread.org/"
+        }
+
         for i, url in enumerate(st.session_state.chapter_images):
-            # Kembali menggunakan URL langsung (tanpa proxy)
-            st.image(url, caption=f"Halaman {i+1}", use_container_width=True)
+            try:
+                img_resp = requests.get(url, headers=headers, timeout=30)
+
+                if img_resp.status_code != 200:
+                    st.warning(f"⚠️ Cloudflare blocked image {i+1}")
+                    continue
+
+                st.image(BytesIO(img_resp.content), caption=f"Halaman {i+1}", use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Gagal memuat gambar {i+1}: {e}")
             
     jumpChapter(key_suffix="Bottom")   
     
@@ -70,11 +88,24 @@ def display_reader_mode():
         st.rerun()
 
 def getChapters(manga):
+    st.write(manga)
     st.subheader(manga["title"])
-    
+    headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://www.mangaread.org/"
+    }
     with st.sidebar:
         # Kembali menggunakan URL langsung
-        st.image(manga["image"], width=150)
+        try:
+            img_resp = requests.get(manga["image"], headers=headers, timeout=30)
+
+            if img_resp.status_code != 200:
+                st.warning(f"⚠️ Cloudflare blocked image")
+                
+            st.image(BytesIO(img_resp.content), width= 100 )
+
+        except Exception as e:
+                st.error(f"Gagal memuat poster komik karena {e}")
         st.markdown(f"**{manga['title']}**")
         st.markdown("---")
         
@@ -105,17 +136,19 @@ def getChapters(manga):
 
             soup = BeautifulSoup(resp.text, "html.parser")
             desc_elem = soup.select_one("div.summary__content")
+            author = soup.select_one("div.author-content")
+            genre = soup.select_one("div.genres-content")
             description = desc_elem.get_text(strip=True) if desc_elem else "Deskripsi tidak ditemukan."
             chapters = []
             for ch in soup.select("ul.main.version-chap li.wp-manga-chapter"):
                 ch_title = ch.select_one("a").get_text(strip=True)
                 ch_link = ch.select_one("a")["href"]
                 ch_date = ch.select_one("span.chapter-release-date i")
+                # author = ch.select_one("author-content a") 
                 ch_date = ch_date.get_text(strip=True) if ch_date else ""
-                chapters.append({"title": ch_title, "link": ch_link, "date": ch_date}) 
+                chapters.append({"title": ch_title, "link": ch_link, "date": ch_date, "author" : author if author else "Tidak ada author ditemukan ", "genre" : genre}) 
                 st.session_state.chapterlist.append(ch_title)
                 st.session_state.chapterlink.update({ch_title:ch_link})
-            
             st.session_state.temp_description = description
             st.session_state.temp_chapters = chapters
         else:
@@ -125,10 +158,21 @@ def getChapters(manga):
         col1, col2 = st.columns([1, 2])
         with col1:
             # Kembali menggunakan URL langsung
-            st.image(manga["image"], width=300)
+            try:
+                img_resp = requests.get(manga["image"], headers=headers, timeout=30)
+
+                if img_resp.status_code != 200:
+                    st.warning(f"⚠️ Cloudflare blocked image")
+                
+                st.image(BytesIO(img_resp.content), width= 300)
+
+            except Exception as e:
+                    st.error(f"Gagal memuat poster komik karena {e}")
         with col2:
             st.markdown("### 🧾 Deskripsi")
             st.write(description)
+            # st.write(st.session_state.temp_chapters['author'])
+            # st.write(chapters['genre'])
             st.markdown(f"🔗 [Buka di Browser]({manga['link']})")
 
         st.markdown("---")
@@ -259,7 +303,20 @@ def display_manga_grid():
             with cols[i % 4]:
                 with st.container(border=True):
                     # Kembali menggunakan URL langsung
-                    st.image(manga.get("image"), use_container_width=True)
+                    headers = {
+                                "User-Agent": "Mozilla/5.0",
+                                "Referer": "https://www.mangaread.org/"
+                              }
+                    try:
+                        img_resp = requests.get(manga["image"], headers=headers, timeout=30)
+
+                        if img_resp.status_code != 200:
+                            st.warning(f"⚠️ Cloudflare blocked image")
+                            
+                        st.image(BytesIO(img_resp.content), use_container_width=True )
+
+                    except Exception as e:
+                            st.error(f"Gagal memuat poster komik karena {e}")
                     st.markdown(
                         f"<p style='text-align: center; font-weight: bold; height: 3em; overflow: hidden;'>"
                         f"{manga['title']}"
@@ -341,7 +398,6 @@ def main():
     if st.session_state.is_reading:
         display_reader_mode() 
     elif st.session_state.showing_profile:
-        # LOGIKA TAMPILAN PROFILE
         if st.sidebar.button("Back to Home"):
             st.session_state.showing_profile = False
             st.rerun()

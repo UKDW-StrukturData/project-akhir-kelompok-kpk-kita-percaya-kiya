@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 
+
 BASE_API = 'https://www.mangaread.org/'
 
 if 'current_chapter_link' not in st.session_state:
@@ -9,6 +10,7 @@ if 'current_chapter_link' not in st.session_state:
 
 def getComicList(filter=None, page=1, order= None):
     try:
+        print("sampe sini bisa")
         if filter is not None:
             base_url = f"{BASE_API}genres/{filter}/"
         else:
@@ -28,7 +30,7 @@ def getComicList(filter=None, page=1, order= None):
         st.write(f"Mengambil data dari: {url}") # Debugging URL
         
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-        
+        # st.write(url)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, "html.parser")
             comics = []
@@ -75,31 +77,36 @@ def getComicList(filter=None, page=1, order= None):
         st.error(f"Terjadi kesalahan saat mengambil data: {e}")
         return []
 
-def scrape_img(link, status = True):
+def scrape_img(link, status=True):
     st.session_state['current_chapter_link'] = link
     ch_link = link
-    
     try:
         resp = requests.get(ch_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
         resp.raise_for_status()
-        
+
         soup = BeautifulSoup(resp.text, "html.parser")
         image_urls = []
         reading_content = soup.select_one('div.reading-content')
-        
+
         if reading_content:
             img_tags = reading_content.find_all('img')
-            # print(img_tags)
             for img in img_tags:
+                # Tetap pakai prioritas data-src dulu
                 url = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
                 if url and url.strip():
                     image_urls.append(url.strip())
         else:
             return None
+
+        # Debug dikit :)
+        # st.write(image_urls)
         return image_urls
+
     except Exception as e:
         st.error(f"❌ Error saat scraping konten chapter: {e}")
         return []
+
+    
 def searchComic(keyword):
     try:
         url = f"{BASE_API}?s={keyword.replace(' ', '+')}&post_type=wp-manga"

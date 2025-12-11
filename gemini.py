@@ -3,6 +3,8 @@ from google import genai
 from google.genai import types
 import script as sc
 from scrape import searchComic
+import requests
+from io import BytesIO
 import time
 
 try:
@@ -138,55 +140,103 @@ def handle_search_by_description(user_desc):
     if not client:
         return
 
-    guessed_title = ""
     with st.spinner("AI sedang menebak judul dari ceritamu..."):
         prompt = f"""
         User Description: "{user_desc}"
-        
+
         Task: Identify the ONE most likely manga/manhwa/manhua title that matches this plot description.
         Rules:
         1. Return ONLY the title. No explanation.
-        2. If multiple match, pick the most famous one.
+        2. If multiple match, pick 3 most famous one including the potential alternative title.
         3. If you really don't know, return "Unknown".
         """
         try:
             response = generate_content(prompt)
-            guessed_title = response.text.strip()
+            guessed_titles = [title.strip() for title in response.text.strip().split(',') if title.strip()]
+            print(response)
         except Exception as e:
             st.error(f"Gagal menghubungi AI: {e}")
             return
 
-    if "Unknown" in guessed_title or not guessed_title:
+    if not guessed_titles or guessed_titles == ["Unknown"]:
         st.error("Maaf, AI tidak bisa menebak judul dari deskripsi tersebut. Coba berikan detail nama karakter atau kekuatan uniknya.")
         return
 
-    st.success(f"💡 Tebakan AI: **{guessed_title}**")
+    st.success(f"💡 Tebakan AI: **{', '.join(guessed_titles)}**")
 
-    with st.spinner(f"Mencari komik '{guessed_title}' di database..."):
-        results = searchComic(guessed_title)
-    
-    if results:
-        comic = results[0]
-        
+    found_comics = []
+    for title in guessed_titles:
+        with st.spinner(f"Mencari komik '{title}' di database..."):
+            results = searchComic(title)
+            if results:
+                found_comics.extend(results[:3])  # Take up to 3 results per title
+
+    if found_comics:
+        # rekomendasi utama
+        main = found_comics[0]
+
         col1, col2 = st.columns([1, 3])
         with col1:
-            st.image(comic['image'], use_container_width=True)
+
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://www.mangaread.org/"
+            }
+
+            try:
+                img_resp = requests.get(main["image"], headers=headers, timeout=30)
+
+                if img_resp.status_code != 200:
+                    st.warning("⚠️ Cloudflare blocked image")
+
+                st.image(BytesIO(img_resp.content), use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Gagal memuat poster komik karena {e}")
+
         with col2:
-            st.markdown(f"### {comic['title']}")
-            st.write(f"Apakah ini komik yang kamu maksud?")
-            
+            st.markdown(f"### {main['title']}")
+            st.write("Apakah ini komik yang kamu maksud?")
+
             if st.button("Ya, Baca Sekarang!", key="found_desc_read"):
-                st.session_state.selected_manga = comic
+                st.session_state.selected_manga = main
                 st.session_state.chapterlist = []
                 st.rerun()
-            
-            if len(results) > 1:
-                st.markdown("---")
-                st.caption("Hasil pencarian lain yang mirip:")
-                for alt_comic in results[1:4]:
-                    if st.button(f"📖 {alt_comic['title']}", key=f"alt_{alt_comic['slug']}"):
-                        st.session_state.selected_manga = alt_comic
-                        st.session_state.chapterlist = []
-                        st.rerun()
+        #rekomendasi alternatif
+        if len(found_comics) > 1:
+            st.markdown("---")
+            st.caption("Hasil pencarian lain yang mirip:")
+
+            alt_comics = found_comics[1:9]  # max 8 alternatif
+            cols = st.columns(3)
+
+            for i, comic in enumerate(alt_comics):
+
+                with cols[i % 3]:
+                    with st.container(border=True):
+
+                        # ==== Load image (pakai header anti cloudflare) ====
+                        headers = {
+                            "User-Agent": "Mozilla/5.0",
+                            "Referer": "https://www.mangaread.org/"
+                        }
+
+                        try:
+                            img_resp = requests.get(comic["image"], headers=headers, timeout=30)
+
+                            if img_resp.status_code != 200:
+                                st.warning(f"⚠️ Cloudflare blocked image")
+
+                            st.image(BytesIO(img_resp.content), use_container_width=True)
+
+                        except Exception as e:
+                            st.error(f"Gagal memuat poster komik karena {e}")
+
+                        # ======================
+                        st.markdown(f"**{comic['title']}**")
+                        if st.button("Baca", key=f"desc_{comic['slug']}_{i}"):
+                            st.session_state.selected_manga = comic
+                            st.session_state.chapterlist = []
+                            st.rerun()
     else:
-        st.warning(f"AI menebak judulnya adalah **'{guessed_title}'**, tapi sayang sekali judul itu tidak ditemukan di server Mangaread.")
+        st.warning("AI menebak beberapa judul, tapi sayang sekali judul-judul itu tidak ditemukan di server Mangaread.")
