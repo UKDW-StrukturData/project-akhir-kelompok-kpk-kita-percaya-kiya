@@ -14,7 +14,9 @@ if 'username' not in st.session_state:
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'page' not in st.session_state:
-    st.session_state['page'] = 'login'    
+    st.session_state['page'] = 'login' 
+if 'user_id' not in st.session_state:
+    st.session_state['user_id'] = None   
 
 def display_login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -38,13 +40,14 @@ def display_login_page():
                 if not username_input or not password_input:
                     st.warning("Please enter your username and password first")
                 else:
-                    is_correct = sc.check_user(username_input, password_input)
+                    is_correct, user_id_from_db, username_from_db = sc.check_user(username_input, password_input)
                     if is_correct:
                         st.session_state['page'] = 'app'
                         st.success("Login Berhasil!")
                         st.session_state['logged_in'] = True
-                        st.session_state['username'] = username_input
-                        st.rerun() 
+                        st.session_state['username'] = username_from_db 
+                        st.session_state['user_id'] = user_id_from_db 
+                        st.rerun()
                     else:
                         st.error("Username atau password salah.")
 

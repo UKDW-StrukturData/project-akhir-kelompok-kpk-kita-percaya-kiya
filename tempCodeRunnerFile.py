@@ -18,7 +18,6 @@ import profile as pr
 import sqlite3
 
 
-
 print(True)
 st.set_page_config(page_title='Duta Comic', 
                    layout="wide", 
@@ -89,7 +88,25 @@ def display_reader_mode():
         st.session_state.is_reading = False
         st.session_state.chapter_images = [] 
         st.rerun()
+def add_bookmark(title, manga_url):
+    # Jika user login → simpan ke DB
+    if st.session_state.get("logged_in", False):
+        bk.insert_bookmark(
+            st.session_state.username,
+            title,
+            manga_url
+        )
+        st.success("Bookmark disimpan ke akun ⭐")
+    else:
 
+        existing_urls = [bm[1] for bm in st.session_state.guest_bookmark] 
+        
+        if manga_url not in existing_urls:
+            st.session_state.guest_bookmark.append((title, manga_url)) # <-- SIMPAN (JUDUL, URL)
+            st.success("Bookmark disimpan sementara ⭐")
+        else:
+            st.info("Sudah ada di bookmark ⭐")
+    
 def display_bookmarks():
     st.header("⭐ Bookmark Kamu")
 
@@ -120,22 +137,6 @@ def display_bookmarks():
 def getChapters(manga):
     st.write(manga)
     st.subheader(manga["title"])
-    if not manga.get("image"):
-        try:
-            resp = requests.get(manga["link"], headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                poster_elem = soup.select_one("div.summary_image img") 
-                if poster_elem and poster_elem.get("src"):
-                    manga["image"] = poster_elem["src"] 
-                else:
-                    print("DEBUG: Poster element tidak ditemukan di halaman detail.")
-            else:
-                print(f"DEBUG: Gagal scrape halaman detail untuk gambar, Status: {resp.status_code}")
-                
-        except Exception as e:
-            print(f"Error saat scraping gambar poster: {e}")
-
     headers = {
             "User-Agent": "Mozilla/5.0",
             "Referer": "https://www.mangaread.org/"
@@ -173,12 +174,8 @@ def getChapters(manga):
             # Tidak login → bookmark guest
             bookmarks = st.session_state.get("guest_bookmark", [])
         else:
-            user_id = st.session_state.get("user_id") # Ambil ID
-            if user_id is not None:
-                # PERBAIKAN: Gunakan user_id (INT)
-                bookmarks = bk.get_bookmark(user_id) 
-            else:
-                bookmarks = [] # Jika user_id hilang, jangan crash
+            # Login → bookmark dari database
+            bookmarks = bk.get_bookmark(st.session_state.username)
 
         # Tampilkan bookmark
         if not bookmarks:
@@ -199,18 +196,7 @@ def getChapters(manga):
                         title = bm
                         url = bm
                 
-                if st.sidebar.button(f"📘 {title}", key=f"bookmark_{title}"):
-                    st.session_state.selected_manga = {
-                        "title": title,
-                        "link": url, 
-                        "image": "",
-                        "slug": title.lower().replace(" ", "-"),
-                        "rating": "0"
-                    } 
-                    st.session_state.chapterlist = []
-                    st.session_state.chapters_limit = 10
-                    st.session_state.is_reading = False 
-                    st.rerun()
+                st.write(f"📘 [{title}]({url})")
 
         if st.button("⬅️ Kembali ke Daftar Komik", use_container_width=True, type="primary"):
             st.session_state.selected_manga = None
@@ -316,24 +302,18 @@ def getChapters(manga):
 
 def add_bookmark(title, manga_url):
     if st.session_state.get("logged_in", False):
-        user_id = st.session_state.get("user_id") 
-        
-        if not user_id:
-            st.error("Error: ID Pengguna tidak ditemukan. Silakan login ulang.")
-            return
-        ok = bk.insert_bookmark(user_id, title, manga_url) 
+        ok = bk.insert_bookmark(st.session_state.username, title, manga_url)
         if ok:
             st.success("Bookmark berhasil disimpan ⭐")
         else:
-            st.info("ℹ️ Komik ini sudah ada di daftar Bookmark Anda.") 
+            st.error("Bookmark sudah pernah disimpan ❗")
     else:
-        existing_urls = [bm[1] for bm in st.session_state.guest_bookmark] 
-        
+        existing_urls = [bm[1] for bm in st.session_state.guest_bookmark]
         if manga_url not in existing_urls:
-            st.session_state.guest_bookmark.append((title, manga_url)) 
+            st.session_state.guest_bookmark.append((title, manga_url))
             st.success("Bookmark disimpan sementara ⭐")
         else:
-            st.info("ℹ️ Komik ini sudah ada di daftar Bookmark sementara Anda.")
+            st.info("Sudah ada di bookmark ⭐")
 
 
 
