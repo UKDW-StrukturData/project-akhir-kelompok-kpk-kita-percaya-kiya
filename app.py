@@ -14,12 +14,110 @@ from script import registration as rg
 from script import script as sc
 import profile as pr
 from io import BytesIO
+from PIL import Image
+import zipfile
 
 
 print(True)
 st.set_page_config(page_title='Duta Comic', 
                    layout="wide", 
                    page_icon="assets/logo_duta_comic[1].png")
+
+HEADERS_DEFAULT = {
+"User-Agent": "Mozilla/5.0",
+"Referer": "https://www.mangaread.org/"
+}
+
+
+def fetch_image_bytes(url, headers=None, timeout=30):
+    headers = headers or HEADERS_DEFAULT
+    resp = requests.get(url, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    return resp.content
+
+def images_urls_to_pdf_bytes(image_urls, dpi=150, headers=None):
+    headers = headers or HEADERS_DEFAULT
+    pil_images = []
+    for i, url in enumerate(image_urls):
+        try:
+            img_bytes = fetch_image_bytes(url, headers=headers)
+            img = Image.open(BytesIO(img_bytes))
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.thumbnail((1200, 1800))
+            pil_images.append(img)
+        except Exception as e:
+            print(f"Warning: gagal ambil/parse image {i+1} ({url}): {e}")
+    if not pil_images:
+        raise ValueError("No valid images to convert to PDF")
+    out = BytesIO()
+    first, rest = pil_images[0], pil_images[1:]
+    first.save(out, format="PDF", save_all=True, append_images=rest, resolution=dpi)
+    out.seek(0)
+    return out.read()
+
+def download_chapter_as_pdf_stream(chapter_title, image_urls, dpi=150, headers=None):
+    safe_name = re.sub(r"[^0-9A-Za-z._-]", "_", chapter_title) or "chapter"
+    pdf_bytes = images_urls_to_pdf_bytes(image_urls, dpi=dpi, headers=headers)
+    return f"{safe_name}.pdf", pdf_bytes
+
+def make_zip_of_all_chapters(manga_title, chapterlink_dict, dpi=150, headers=None):
+    buf = BytesIO()
+    headers = headers or HEADERS_DEFAULT
+    total_chapters = len(chapterlink_dict)
+    progress_container = st.empty() 
+    zip_bar = progress_container.progress(0, text=f"Chapter 0/{total_chapters}...")
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for i, (title, link) in enumerate(chapterlink_dict.items()):
+            try:
+                zip_bar.progress((i + 1) / total_chapters, text=f"Chapter {i+1}/{total_chapters} ({title})...")
+                image_urls = scrape_img(link)
+                fname, pdf_bytes = download_chapter_as_pdf_stream(
+                    title, 
+                    image_urls,
+                    dpi=dpi,
+                    headers=headers
+                )
+                zf.writestr(fname, pdf_bytes)
+            except Exception as e:
+                st.warning(f"Warning: Gagal generate PDF untuk '{title}'. Mungkin gambar tidak bisa diakses: {e}")
+    zip_bar.empty()
+    buf.seek(0)
+    return buf.read()
+
+
+def prev_chapter():
+    if st.button("⬅️ Prev", use_container_width=True, key="btn_prev_chap"):
+        if st.session_state.current_chapter_title in st.session_state.chapterlist:
+            idx = st.session_state.chapterlist.index(st.session_state.current_chapter_title)
+        else:
+            idx = 0
+        if idx + 1 < len(st.session_state.chapterlist):
+            next_title = st.session_state.chapterlist[idx + 1]
+            if next_title != st.session_state.current_chapter_title:
+                st.session_state.current_chapter_title = next_title
+                st.session_state.chapter_images = scrape_img(st.session_state.chapterlink[next_title])
+                st.session_state['read_history'].push(st.session_state.current_chapter_title) 
+                st.rerun()
+        else:
+            st.warning("Kamu sudah di chapter paling awal!")
+
+def next_chapter():
+    if st.button("Next ➡️", use_container_width=True, key="btn_next_chap"):
+        if st.session_state.current_chapter_title in st.session_state.chapterlist:
+            idx = st.session_state.chapterlist.index(st.session_state.current_chapter_title)
+        else:
+            idx = 0
+        if idx - 1 >= 0:
+            next_title = st.session_state.chapterlist[idx - 1]
+            if next_title != st.session_state.current_chapter_title:
+                st.session_state.current_chapter_title = next_title
+                st.session_state.chapter_images = scrape_img(st.session_state.chapterlink[next_title])
+                st.session_state['read_history'].push(st.session_state.current_chapter_title) 
+                st.rerun()
+        else:
+            st.warning("Anda sudah berada di chapter terakhir!")
+
 
 def jumpChapter(key_suffix="Top"):
     if st.session_state.current_chapter_title in st.session_state.chapterlist:
@@ -42,8 +140,27 @@ def jumpChapter(key_suffix="Top"):
         st.rerun()
 
 def display_reader_mode():
+    chapter_to_load = st.session_state.current_chapter_title
+    link_to_load = st.session_state.chapterlink[chapter_to_load]
+    if not st.session_state.chapter_images: 
+        if link_to_load:
+            with st.spinner(f"Memuat chapter baru: **{chapter_to_load}**..."):
+                try:
+                    image_urls = scrape_img(link_to_load) 
+                    
+                    if image_urls:
+                        st.session_state.chapter_images = image_urls
+                    else:
+                        st.error("Gagal mendapatkan daftar gambar untuk chapter ini.")
+                        st.session_state.chapter_images = []
+                except Exception as e:
+                    st.error(f"Gagal saat scraping gambar untuk {chapter_to_load}: {e}")
+                    st.session_state.chapter_images = []
+        else:
+            st.error("Link chapter tidak ditemukan di session state. Silakan kembali ke daftar chapter.")
+
     with st.sidebar:
-        st.header(f"📖 Membaca: {st.session_state['current_chapter_title']}")
+        st.header(f"📖 Membaca: {st.session_state.current_chapter_title}")
         
         if st.button("⬅️ Kembali ke Daftar Chapter"):
             st.session_state.is_reading = False
@@ -55,7 +172,25 @@ def display_reader_mode():
     if st.session_state.selected_manga:
         st.markdown(f"<h1 style='text-align: center;'>{st.session_state.selected_manga['title']}</h1>", unsafe_allow_html=True)
     
+    try:
+        pdf_bytes = images_urls_to_pdf_bytes(st.session_state.chapter_images)
+        st.download_button(
+            label="Download Chapter ini (PDF)",
+            data=pdf_bytes,
+            file_name=f"{st.session_state.current_chapter_title}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    except Exception as e:
+        st.error("Gagal membuat PDF")
+
     jumpChapter(key_suffix="Top")
+    col1,col2 = st.columns(2)
+    with col1:
+        prev_chapter()
+            
+    with col2:
+        next_chapter()
     
     if not st.session_state.chapter_images:
         st.error("Gagal menampilkan konten. Daftar gambar kosong.")
@@ -79,7 +214,6 @@ def display_reader_mode():
             except Exception as e:
                 st.error(f"Gagal memuat gambar {i+1}: {e}")
             
-    jumpChapter(key_suffix="Bottom")   
     
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Daftar Chapter (Bawah)"):
@@ -174,6 +308,31 @@ def getChapters(manga):
             # st.write(st.session_state.temp_chapters['author'])
             # st.write(chapters['genre'])
             st.markdown(f"🔗 [Buka di Browser]({manga['link']})")
+            with st.container():
+                if st.button("⬇️ Buat ZIP Semua Chapter", type="primary", use_container_width=True):
+                    with st.spinner(f"Membuat ZIP untuk **{manga['title']}** (Butuh waktu lama, sabar ya)..."):
+                        try:
+                            zip_bytes = make_zip_of_all_chapters(
+                                manga['title'], 
+                                st.session_state.chapterlink
+                            )
+                            st.session_state.zip_data = zip_bytes
+                            st.success("ZIP berhasil dibuat!")
+                            st.rerun() 
+                        except Exception as e:
+                            st.error(f"Gagal membuat ZIP: {e}")
+                            st.session_state.zip_data = None
+                if st.session_state.zip_data:
+                    st.download_button(
+                        label=f"Download {manga['title']}.zip 📦",
+                        data=st.session_state.zip_data,
+                        file_name=f"{manga['title']}-all-chapters.zip",
+                        mime="application/zip",
+                        use_container_width=True
+                    )
+                    if st.button("Hapus ZIP yang Dibuat", use_container_width=True):
+                        st.session_state.zip_data = None
+                        st.rerun()
 
         st.markdown("---")
         st.markdown("<h2 style='text-align: center; color: red; padding-bottom: 2em;'>📜 Daftar Chapter</h2>", unsafe_allow_html= True)
@@ -394,6 +553,7 @@ def main():
     if 'read_history' not in st.session_state: st.session_state['read_history'] = chapterStack.stack()
     if 'has_fetched_once' not in st.session_state: st.session_state.has_fetched_once = False
     if 'showing_profile' not in st.session_state: st.session_state.showing_profile = False
+    if 'zip_data' not in st.session_state: st.session_state.zip_data = None
         
     if st.session_state.is_reading:
         display_reader_mode() 

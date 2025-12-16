@@ -61,7 +61,7 @@ def getComicList(filter=None, page=1, order= None):
                     "slug": slug,
                     "rating": rating_text 
                 })
-                print(img_elem)
+                # print(img_elem)
                 # print(comics)
 
                 
@@ -79,6 +79,7 @@ def getComicList(filter=None, page=1, order= None):
 
 def scrape_img(link, status=True):
     st.session_state['current_chapter_link'] = link
+    # print(link)
     ch_link = link
     try:
         resp = requests.get(ch_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
