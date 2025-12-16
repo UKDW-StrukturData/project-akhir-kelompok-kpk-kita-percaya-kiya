@@ -1,3 +1,6 @@
+import streamlit as st
+from script import script as db
+
 class node:
     def __init__(self, data):
         self.data = data
@@ -32,3 +35,8 @@ class stack:
 
     def isEmpty(self):
         return self.size == 0
+
+def history(data):
+    print(data)
+
+# history()

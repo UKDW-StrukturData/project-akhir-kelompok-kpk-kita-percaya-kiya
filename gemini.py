@@ -52,7 +52,6 @@ def generate_content(prompt):
                 # Jika error lain (misal 404 Model Not Found atau API Key salah), langsung stop
                 raise e
 
-# --- MAIN FUNCTION ---
 def geminiSearch(query):
     username = st.session_state.get('username')
     if not username:

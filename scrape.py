@@ -3,19 +3,91 @@ import requests
 from bs4 import BeautifulSoup
 
 
-BASE_API = 'https://www.mangaread.org/'
+BASE_URL = 'https://www.mangaread.org/'
+
+session = requests.Session()
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.mangaread.org/",
+    "Connection": "keep-alive",
+}
 
 if 'current_chapter_link' not in st.session_state:
     st.session_state['current_chapter_link'] = None
 
+@st.cache_data(ttl=60 * 60 * 6) 
+def get_comic_detail(link: str):
+        try:
+            resp = session.get(link, headers=HEADERS, timeout=30)
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            # Poster
+            poster = None
+            poster_el = soup.select_one("div.summary_image img")
+            if poster_el:
+                poster = poster_el.get("src")
+
+            # Description
+            desc_el = soup.select_one("div.summary__content")
+            description = desc_el.get_text(strip=True) if desc_el else ""
+
+            # Author
+            author_el = soup.select_one("div.author-content a")
+            author = author_el.get_text(strip=True) if author_el else "Unknown"
+
+            # Genre
+            genres = []
+            for g in soup.select("div.genres-content a"):
+                genres.append(g.get_text(strip=True))
+
+            # Chapters
+            chapters = []
+            for ch in soup.select("ul.main.version-chap li.wp-manga-chapter"):
+                a = ch.select_one("a")
+                date_el = ch.select_one("span.chapter-release-date i")
+
+                if not a:
+                    continue
+
+                chapters.append({
+                    "title": a.get_text(strip=True),
+                    "link": a["href"],
+                    "date": date_el.get_text(strip=True) if date_el else ""
+                })
+
+            return {
+                "image": poster,
+                "description": description,
+                "author": author,
+                "genre": genres,
+                "chapters": chapters
+            }
+
+        except Exception as e:
+            st.error(f"Gagal mengambil detail komik: {e}")
+            return None
+
+@st.cache_data(ttl=60 * 30)
 def getComicList(filter=None, page=1, order= None):
+    # st.write(filter == False)
     try:
-        print("sampe sini bisa")
-        if filter is not None:
-            base_url = f"{BASE_API}genres/{filter}/"
+        # print("sampe sini bisa")
+        # a certain filter
+        if filter:
+            filter = "+".join(filter)
+            base_url = f"{BASE_URL}genres/{filter}"
         else:
-            base_url = f"{BASE_API}"
+            base_url = f"{BASE_URL}"
         
+        st.write(base_url)
         # print(filter)
         if page == 1:
             url = base_url
@@ -26,11 +98,12 @@ def getComicList(filter=None, page=1, order= None):
             url = f"{url}?m_orderby={order}"    
         else:
             url = f"{url}"
-
+        st.write(url)
         st.write(f"Mengambil data dari: {url}") # Debugging URL
         
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        resp = session.get(url, headers=HEADERS, timeout=30)
         # st.write(url)
+        # st.write(resp.status_code)
         if resp.status_code == 200:
             soup = BeautifulSoup(resp.text, "html.parser")
             comics = []
@@ -38,7 +111,7 @@ def getComicList(filter=None, page=1, order= None):
             for item in soup.select("div.page-item-detail"):
                 title_link_elem = item.select_one("div.item-summary h3.h5 a")
                 img_elem = item.select_one("div.item-thumb a img")
-                print(img_elem, end="\n")
+                # print(img_elem, end="\n")
                 if not (title_link_elem and img_elem):
                     continue
 
@@ -81,7 +154,7 @@ def scrape_img(link, status=True):
     st.session_state['current_chapter_link'] = link
     ch_link = link
     try:
-        resp = requests.get(ch_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        resp = session.get(ch_link, headers=HEADERS, timeout=30)
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -109,9 +182,8 @@ def scrape_img(link, status=True):
     
 def searchComic(keyword):
     try:
-        url = f"{BASE_API}?s={keyword.replace(' ', '+')}&post_type=wp-manga"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, headers=headers, timeout=10)
+        url = f"{BASE_URL}?s={keyword.replace(' ', '+')}&post_type=wp-manga"
+        resp = session.get(url, headers=HEADERS, timeout=10)
         if resp.status_code != 200:
             st.warning("Gagal mengakses halaman search.")
             return []
@@ -167,7 +239,7 @@ def prev_chapter():
         soup = BeautifulSoup(resp.text, "html.parser")
         image_urls = []
         reading_content = soup.select_one('div.nav-previous')
-        print(reading_content)
+        # print(reading_content)
         if reading_content:
             print(reading_content)
             # img_tags = reading_content.find_all('img')
