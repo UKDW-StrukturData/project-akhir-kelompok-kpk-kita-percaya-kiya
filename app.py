@@ -132,7 +132,7 @@ def jumpChapter(key_suffix="Top"):
         label_visibility="collapsed",
         key=f"jump_{key_suffix}"
     )
-    
+
     if selected != st.session_state.current_chapter_title:
         st.session_state.current_chapter_title = selected
         st.session_state.chapter_images = scrape_img(st.session_state.chapterlink[selected])
@@ -185,12 +185,6 @@ def display_reader_mode():
         st.error("Gagal membuat PDF")
 
     jumpChapter(key_suffix="Top")
-    col1,col2 = st.columns(2)
-    with col1:
-        prev_chapter()
-            
-    with col2:
-        next_chapter()
     
     if not st.session_state.chapter_images:
         st.error("Gagal menampilkan konten. Daftar gambar kosong.")
@@ -214,6 +208,12 @@ def display_reader_mode():
             except Exception as e:
                 st.error(f"Gagal memuat gambar {i+1}: {e}")
             
+    col1,col2 = st.columns(2)
+    with col1:
+        prev_chapter()
+            
+    with col2:
+        next_chapter()
     
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("⬅️ Kembali ke Daftar Chapter (Bawah)"):
