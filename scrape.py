@@ -87,7 +87,7 @@ def getComicList(filter=None, page=1, order= None):
         else:
             base_url = f"{BASE_URL}"
         
-        st.write(base_url)
+        # st.write(base_url)
         # print(filter)
         if page == 1:
             url = base_url
@@ -98,7 +98,7 @@ def getComicList(filter=None, page=1, order= None):
             url = f"{url}?m_orderby={order}"    
         else:
             url = f"{url}"
-        st.write(url)
+        # st.write(url)
         st.write(f"Mengambil data dari: {url}") # Debugging URL
         
         resp = session.get(url, headers=HEADERS, timeout=30)
@@ -183,6 +183,7 @@ def scrape_img(link, status=True):
 def searchComic(keyword):
     try:
         url = f"{BASE_URL}?s={keyword.replace(' ', '+')}&post_type=wp-manga"
+        st.write(url)
         resp = session.get(url, headers=HEADERS, timeout=10)
         if resp.status_code != 200:
             st.warning("Gagal mengakses halaman search.")
@@ -192,11 +193,13 @@ def searchComic(keyword):
         comics = []
 
         results = soup.select("div.c-tabs-item__content")
+        # st.write(results)
         if not results:
             return []
         
         for item in results:
             title_el = item.select_one("h3 a")
+            
             img_el = item.select_one("img")
 
             if not title_el or not img_el:
@@ -204,16 +207,21 @@ def searchComic(keyword):
 
             title_text = title_el.get_text(strip=True)
 
-            if keyword.lower() not in title_text.lower():
-                continue
+            # if keyword.lower() not in title_text.lower():
+            #     continue
 
             link = title_el["href"]
             slug = link.split("/manga/")[-1].strip("/")
             rating_elem = item.select_one("div.post-total-rating span")
-            if not rating_elem:
-                rating_elem = "N/A"
             
-            rating_text = float(rating_elem.get_text(strip=True) if rating_elem else "N/A")
+            try:
+                if rating_elem:
+                    rating_text = float(rating_elem.get_text(strip=True))
+                else:
+                    rating_text = 0.0
+            except ValueError:
+                rating_text = 0.0
+
             comics.append({
                 "title": title_text,
                 "link": link,

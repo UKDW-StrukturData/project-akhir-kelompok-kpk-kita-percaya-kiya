@@ -131,7 +131,7 @@ def handle_recommendation(username):
     if found_count == 0:
         st.warning("Gemini menyarankan judul, tapi kami tidak menemukannya di database saat ini.")
 
-# --- HANDLER 2: SEARCH BY DESCRIPTION ---
+#description here
 def handle_search_by_description(user_desc):
     st.markdown(f"### 🔍 Detektif Komik AI")
     st.info(f"**Clue dari kamu:** \"{user_desc}\"")
@@ -201,17 +201,17 @@ def handle_search_by_description(user_desc):
                 st.session_state.selected_manga = main
                 st.session_state.chapterlist = []
                 st.rerun()
-        #rekomendasi alternatif
+        #alternative
         if len(found_comics) > 1:
             st.markdown("---")
             st.caption("Hasil pencarian lain yang mirip:")
 
             alt_comics = found_comics[1:9]  # max 8 alternatif
-            cols = st.columns(3)
+            cols = st.columns(4)
 
             for i, comic in enumerate(alt_comics):
 
-                with cols[i % 3]:
+                with cols[i % 4]:
                     with st.container(border=True):
 
                         # ==== Load image (pakai header anti cloudflare) ====
