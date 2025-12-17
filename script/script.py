@@ -119,6 +119,38 @@ def check_user(username, password):
         print(f"Error saat check_user: {e}")
         return False, None, None
 
+#update user
+def update_profile(usernameNew, id_user, passwordNew):
+    try:
+        conn = init_connection()
+        if not conn.is_connected():
+            conn.reconnect()
+        cur = conn.cursor(dictionary=True)
+        
+        # Fetch hash for username
+        hashed_password = bcrypt.hashpw(passwordNew.encode('utf-8'), bcrypt.gensalt())
+        # placeholder %s
+        sql_command = "UPDATE pengguna set username = %s, password_hash = %s WHERE user_id = %s"
+        
+        # Kirim username dan pass sebagai tuple (,)
+        cur.execute(sql_command, (usernameNew, hashed_password, id_user)) 
+        conn.commit()
+        affected = cur.rowcount
+        cur.close()
+        if affected > 0 :
+            return "Password update is succesful"
+        else:
+            return "Failed to update password"
+        
+        # if user_record:
+        #     stored_hash = user_record['password_hash'].encode('utf-8')
+            
+        #     # 3. Verify the password
+        #     if bcrypt.checkpw(password.encode('utf-8'), stored_hash):
+        #         return user_record # Success! Return user data            
+    except Exception as e:
+        print(f"Error saat update user: {e}")
+        return False
 
 #add history
 def history_insert(user_id, manga_title, chapter_title, genres: list):
@@ -197,9 +229,7 @@ def bar_chart_data(user_id):
         return []
 
 
-# =========================
-# DATA UNTUK PIE CHART
-# =========================
+#barr
 def genre_chart_data(user_id):
     try:
         conn = init_connection()

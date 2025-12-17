@@ -5,7 +5,7 @@ import script.script as db
 import bookmark as bk
 import requests
 from io import BytesIO
-import datetime
+import time
 from bs4 import BeautifulSoup
 import scrape as sc
 
@@ -267,9 +267,11 @@ def show_profile():
                     st.warning("Username dan Password tidak boleh kosong.")
                 else:
                     # Di sini nanti kamu panggil fungsi update database dari script.py
-                    # sc.update_user(st.session_state.username, new_username, new_password)
-                    st.success("Data berhasil diperbarui (Dummy)!")
-                    st.session_state.username = new_username # Update session sementara
+                    db.update_profile(new_username,user_id, new_password)
+                    st.success("Data berhasil diperbarui!")
+                    time.sleep(3)
+                    st.success("Data berhasil diperbarui!")
+                    st.session_state.username = new_username 
                     st.rerun()
 
 # so we can directly import
