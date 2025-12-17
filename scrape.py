@@ -235,30 +235,30 @@ def searchComic(keyword):
     except Exception as e:
         st.error(f"Error search: {e}")
         return []
-def next_chapter():
-    pass
-def prev_chapter():
-    cur_link = st.session_state['current_chapter_link']
+# def next_chapter():
+#     pass
+# def prev_chapter():
+#     cur_link = st.session_state['current_chapter_link']
     
-    try:
-        resp = requests.get(cur_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-        resp.raise_for_status()
+#     try:
+#         resp = requests.get(cur_link, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+#         resp.raise_for_status()
         
-        soup = BeautifulSoup(resp.text, "html.parser")
-        image_urls = []
-        reading_content = soup.select_one('div.nav-previous')
-        # print(reading_content)
-        if reading_content:
-            print(reading_content)
-            # img_tags = reading_content.find_all('img')
-            # # print(img_tags)
-            # for img in img_tags:
-            #     url = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
-            #     if url and url.strip():
-            #         image_urls.append(url.strip())
-        else:
-            return None
-        return image_urls
-    except Exception as e:
-        st.error(f"❌ Error saat scraping konten chapter: {e}")
-        return []
+#         soup = BeautifulSoup(resp.text, "html.parser")
+#         image_urls = []
+#         reading_content = soup.select_one('div.nav-previous')
+#         # print(reading_content)
+#         if reading_content:
+#             print(reading_content)
+#             # img_tags = reading_content.find_all('img')
+#             # # print(img_tags)
+#             # for img in img_tags:
+#             #     url = img.get('data-src') or img.get('data-lazy-src') or img.get('src')
+#             #     if url and url.strip():
+#             #         image_urls.append(url.strip())
+#         else:
+#             return None
+#         return image_urls
+#     except Exception as e:
+#         st.error(f"❌ Error saat scraping konten chapter: {e}")
+#         return []

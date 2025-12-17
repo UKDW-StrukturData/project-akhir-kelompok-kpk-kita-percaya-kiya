@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 from scrape import getComicList, scrape_img, searchComic, get_comic_detail
 from gemini import geminiSearch
 from ADT import chapterStack
-from ADT import chapterLinkedList as LL
 import script.login as lg
 import script.registration as rg
 import script.script as db
@@ -269,6 +268,7 @@ def add_bookmark(title, manga_url):
 # @st.cache_data           
 def getChapters(manga):
     history = db.select_history(st.session_state['user_id'],manga['title'])
+    st.session_state['read_history'] = chapterStack.stack()
     for i in history:
         st.session_state['read_history'].push(i)
     # st.write(manga)
