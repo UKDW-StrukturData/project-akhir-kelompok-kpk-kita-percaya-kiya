@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import script.script as db 
-import bookmark as bk
+import script.bookmark as bk
 import requests
 from io import BytesIO
 import time

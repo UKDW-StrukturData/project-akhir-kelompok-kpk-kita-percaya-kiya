@@ -10,7 +10,7 @@ import script.registration as rg
 import script.script as db
 import profile as pr
 from io import BytesIO 
-import bookmark as bk
+import script.bookmark as bk
 import profile as pr
 from PIL import Image
 import zipfile
@@ -544,10 +544,10 @@ def display_manga_grid():
             st.session_state.showing_profile = True
             st.rerun()
     
-    search = st.sidebar.text_input("Pencarian dan Gemini", placeholder="e.g: Beri Aku rekomendasi...")
+    search = st.sidebar.text_input("Pencarian dan Gemini", placeholder="e.g: Beri Aku deskripsi ....")
     
     if search:
-        if "rekomendasi" in search.lower() or "deskripsi" in search.lower():
+        if "diskusi" in search.lower() or "deskripsi" in search.lower():
             geminiSearch(search)
         else:
             with st.spinner(f"Mencari komik dengan kata kunci: '{search}'..."):
