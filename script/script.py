@@ -72,14 +72,9 @@ def new_user(username, email, password):
         if not conn.is_connected():
             conn.reconnect()
         cur = conn.cursor()
-        
-        # HASH password using bcrypt
         hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        
-        # Prevent sqlk injection
         sql_command = "INSERT INTO pengguna (username, email, password_hash) VALUES (%s, %s, %s)"
-        
-        # Store hash as string 
+
         data_to_insert = (username, email, hashed_password.decode('utf-8'))
         
         cur.execute(sql_command, data_to_insert)
@@ -96,6 +91,7 @@ def new_user(username, email, password):
 
 
 def check_user(username, password):
+    """Memverifikasi kredensial dan mengembalikan status, user_id, dan username."""
     try:
         conn = init_connection()
         if not conn.is_connected():
@@ -106,10 +102,9 @@ def check_user(username, password):
         # Gunakan '%s' untuk keamanan
         sql_command = "SELECT * FROM pengguna WHERE username = %s"
         
-        # Kirim username sebagai tuple (,)
         cur.execute(sql_command, (username,)) 
         
-        user_record = cur.fetchone() # Ambil satu hasil
+        user_record = cur.fetchone()
         cur.close()
         
         if user_record:

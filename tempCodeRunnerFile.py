@@ -1,20 +1,24 @@
 import streamlit as st
+import os
+import re
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-from scrape import getComicList, scrape_img, searchComic, get_comic_detail
+from scrape import getComicList, scrape_img, searchComic
 from gemini import geminiSearch
 from ADT import chapterStack
 from ADT import chapterLinkedList as LL
-import script.login as lg
-import script.registration as rg
-import script.script as db
+from script import login as lg
+from script import registration as rg
+from script import script as sc
 import profile as pr
 from io import BytesIO 
 import bookmark as bk
 import profile as pr
+import sqlite3
 
-# print(True)
+
+print(True)
 st.set_page_config(page_title='Duta Comic', 
                    layout="wide", 
                    page_icon="assets/logo_duta_comic[1].png")
@@ -84,14 +88,31 @@ def display_reader_mode():
         st.session_state.is_reading = False
         st.session_state.chapter_images = [] 
         st.rerun()
+def add_bookmark(title, manga_url):
+    # Jika user login → simpan ke DB
+    if st.session_state.get("logged_in", False):
+        bk.insert_bookmark(
+            st.session_state.username,
+            title,
+            manga_url
+        )
+        st.success("Bookmark disimpan ke akun ⭐")
+    else:
+
+        existing_urls = [bm[1] for bm in st.session_state.guest_bookmark] 
         
+        if manga_url not in existing_urls:
+            st.session_state.guest_bookmark.append((title, manga_url)) # <-- SIMPAN (JUDUL, URL)
+            st.success("Bookmark disimpan sementara ⭐")
+        else:
+            st.info("Sudah ada di bookmark ⭐")
+    
 def display_bookmarks():
     st.header("⭐ Bookmark Kamu")
 
-    # if lpgin fetch db
+    # Jika login → ambil dari DB 
     if st.session_state.get("logged_in", False):
-        user_id = st.session_state.get("user_id") 
-        bookmarks = bk.get_bookmark(user_id)
+        bookmarks = bk.get_bookmark(st.session_state.username)
         if not bookmarks:
             st.write("Belum ada bookmark.")
             return
@@ -108,51 +129,14 @@ def display_bookmarks():
             st.write("Belum ada bookmark.")
             return
         
-        # title and url
+        # PERBAIKAN: Destructure tuple (title, url) untuk guest bookmark
         for title, url in st.session_state.guest_bookmark: 
             st.write(f"📘 [{title}]({url})") # Menampilkan judul sebagai link
-def add_bookmark(title, manga_url):
-    if st.session_state.get("logged_in", False):
-        user_id = st.session_state.get("user_id") 
-        
-        if not user_id:
-            st.error("Error: ID Pengguna tidak ditemukan. Silakan login ulang.")
-            return
-        ok = bk.insert_bookmark(user_id, title, manga_url) 
-        if ok:
-            st.success("Bookmark berhasil disimpan ⭐")
-        else:
-            st.info("ℹ️ Komik ini sudah ada di daftar Bookmark Anda.") 
-    else:
-        existing_urls = [bm[1] for bm in st.session_state.guest_bookmark] 
-        
-        if manga_url not in existing_urls:
-            st.session_state.guest_bookmark.append((title, manga_url)) 
-            st.success("Bookmark disimpan sementara ⭐")
-        else:
-            st.info("ℹ️ Komik ini sudah ada di daftar Bookmark sementara Anda.")
 
-# @st.cache_data           
+
 def getChapters(manga):
-    history = db.select_history(st.session_state['user_id'],manga['title'])
-    for i in history:
-        st.session_state['read_history'].push(i)
-    # st.write(manga)
+    st.write(manga)
     st.subheader(manga["title"])
-    if not manga.get("image"):
-        try:
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, "html.parser")
-                poster_elem = soup.select_one("div.summary_image img") 
-                if poster_elem and poster_elem.get("src"):
-                    manga["image"] = poster_elem["src"] 
-                else:
-                    print("DEBUG: Poster element tidak ditemukan di halaman detail.")
-            else:
-                print(f"DEBUG: Gagal scrape halaman detail untuk gambar, Status: {resp.status_code}")
-                
-        except Exception as e:
-            print(f"Error saat scraping gambar poster: {e}")
     headers = {
             "User-Agent": "Mozilla/5.0",
             "Referer": "https://www.mangaread.org/"
@@ -182,6 +166,7 @@ def getChapters(manga):
                  if st.button("⬅️ Kembali ke Sebelumnya (POP)", key="btn_pop", use_container_width=True):
                      st.session_state['read_history'].pop()
                      st.rerun()
+                 
         st.markdown("---")
         st.sidebar.subheader("🔖 Bookmark Kamu")
 
@@ -189,12 +174,8 @@ def getChapters(manga):
             # Tidak login → bookmark guest
             bookmarks = st.session_state.get("guest_bookmark", [])
         else:
-            user_id = st.session_state.get("user_id") # Ambil ID
-            if user_id is not None:
-                #bookmark used_id based
-                bookmarks = bk.get_bookmark(user_id) 
-            else:
-                bookmarks = [] # Jika user_id hilang, jangan crash
+            # Login → bookmark dari database
+            bookmarks = bk.get_bookmark(st.session_state.username)
 
         # Tampilkan bookmark
         if not bookmarks:
@@ -215,18 +196,7 @@ def getChapters(manga):
                         title = bm
                         url = bm
                 
-                if st.sidebar.button(f"📘 {title}", key=f"bookmark_{title}"):
-                    st.session_state.selected_manga = {
-                        "title": title,
-                        "link": url, 
-                        "image": "",
-                        "slug": title.lower().replace(" ", "-"),
-                        "rating": "0"
-                    } 
-                    st.session_state.chapterlist = []
-                    st.session_state.chapters_limit = 10
-                    st.session_state.is_reading = False 
-                    st.rerun()
+                st.write(f"📘 [{title}]({url})")
 
         if st.button("⬅️ Kembali ke Daftar Komik", use_container_width=True, type="primary"):
             st.session_state.selected_manga = None
@@ -244,16 +214,7 @@ def getChapters(manga):
             soup = BeautifulSoup(resp.text, "html.parser")
             desc_elem = soup.select_one("div.summary__content")
             author = soup.select_one("div.author-content")
-            genre = soup.select_one("div.genres-content") 
-            if author and author.text:
-                st.session_state.selected_manga['author'] = author.text
-            else:
-                st.session_state.selected_manga['author'] = 'unknown'
-            if genre and genre.text:
-                st.session_state.selected_manga['genre'] = genre.text
-            else:
-                st.session_state.selected_manga['author'] = 'unknown'   
-            # st.session_state.selected_manga
+            genre = soup.select_one("div.genres-content")
             description = desc_elem.get_text(strip=True) if desc_elem else "Deskripsi tidak ditemukan."
             chapters = []
             for ch in soup.select("ul.main.version-chap li.wp-manga-chapter"):
@@ -262,7 +223,7 @@ def getChapters(manga):
                 ch_date = ch.select_one("span.chapter-release-date i")
                 # author = ch.select_one("author-content a") 
                 ch_date = ch_date.get_text(strip=True) if ch_date else ""
-                chapters.append({"title": ch_title, "link": ch_link, "date": ch_date})
+                chapters.append({"title": ch_title, "link": ch_link, "date": ch_date, "author" : author if author else "Tidak ada author ditemukan ", "genre" : genre}) 
                 st.session_state.chapterlist.append(ch_title)
                 st.session_state.chapterlink.update({ch_title:ch_link})
             st.session_state.temp_description = description
@@ -273,9 +234,9 @@ def getChapters(manga):
 
         col1, col2 = st.columns([1, 2])
         with col1:
-            # durectly use urrlllll🥹🥹🥹🥹🥹🥹🥹🥹
+            # Kembali menggunakan URL langsung
             try:
-                img_resp = requests.Session().get(manga["image"], headers=headers, timeout=30)
+                img_resp = requests.get(manga["image"], headers=headers, timeout=30)
 
                 if img_resp.status_code != 200:
                     st.warning(f"⚠️ Cloudflare blocked image")
@@ -287,9 +248,8 @@ def getChapters(manga):
         with col2:
             st.markdown("### 🧾 Deskripsi")
             st.write(description)
-            st.write("Author : ", st.session_state.selected_manga['author'])
-            st.write("Genre : ",st.session_state.selected_manga['genre'])
-            
+            # st.write(st.session_state.temp_chapters['author'])
+            # st.write(chapters['genre'])
             st.markdown(f"🔗 [Buka di Browser]({manga['link']})")
             
             if st.button("⭐ Tambah ke Bookmark", key="add_manga_bookmark_btn", use_container_width=True):
@@ -302,28 +262,15 @@ def getChapters(manga):
             st.warning("Belum ada chapter yang ditemukan.")
         else:
             visible_chapters = chapters[:st.session_state.chapters_limit]
-            history = db.select_history(st.session_state['user_id'],manga['title'])
-            # st.write(history)
-            read_chapter = []
-            for i in history:
-                # st.write(i)
-                read_chapter.append(i[1])
-            # st.write(read_chapter)
+            
             for i, ch in enumerate(visible_chapters):
                 col_title, col_read= st.columns([3, 1.5])
                 
                 with col_title:
-                    if ch['title'] in read_chapter:
-                        st.markdown(
-                            f"**{ch['title']}** <span style='color:green; font-size:0.9em;'>({ch['date']}) Chapter ini sudah dibaca</span>", 
-                            unsafe_allow_html=True
-                        )
-                    else:                        
-                        st.markdown(
-                            f"**{ch['title']}** <span style='color:gray; font-size:0.8em;'> ({ch['date']})</span>", 
-                            unsafe_allow_html=True
-                        )
-                
+                    st.markdown(
+                        f"**{ch['title']}** <span style='color:gray; font-size:0.8em;'> ({ch['date']})</span>", 
+                        unsafe_allow_html=True
+                    )
                     
                 with col_read:
                     if st.button("▶️ Baca", key=f"btn_read_{ch['link']}", use_container_width=True):
@@ -333,12 +280,6 @@ def getChapters(manga):
                         if image_urls:
                             st.session_state['read_history'].push(ch['title'])
                             st.success("Ditambahkan ke riwayat (PUSH)!")
-                            db.history_insert(
-                                user_id=st.session_state.user_id,
-                                manga_title=manga["title"],
-                                chapter_title=ch["title"],
-                                genres=st.session_state.selected_manga['genre'].strip().split(",")
-                            )
                             st.session_state.chapter_images = image_urls
                             st.session_state.current_chapter_title = ch['title']
                             st.session_state.is_reading = True
@@ -358,7 +299,24 @@ def getChapters(manga):
     except Exception as e:
         st.error(f"Terjadi kesalahan saat scraping detail: {e}")
 
-# @st.cache_data
+
+def add_bookmark(title, manga_url):
+    if st.session_state.get("logged_in", False):
+        ok = bk.insert_bookmark(st.session_state.username, title, manga_url)
+        if ok:
+            st.success("Bookmark berhasil disimpan ⭐")
+        else:
+            st.error("Bookmark sudah pernah disimpan ❗")
+    else:
+        existing_urls = [bm[1] for bm in st.session_state.guest_bookmark]
+        if manga_url not in existing_urls:
+            st.session_state.guest_bookmark.append((title, manga_url))
+            st.success("Bookmark disimpan sementara ⭐")
+        else:
+            st.info("Sudah ada di bookmark ⭐")
+
+
+
 def display_manga_grid():
     mangas = []
     
@@ -377,7 +335,6 @@ def display_manga_grid():
             st.session_state.read_history = chapterStack.stack()
             st.session_state.has_fetched_once = False
             st.session_state.showing_profile = False
-            st.cache_data.clear
             st.rerun()
         
         if st.button("Profile", use_container_width=True):
@@ -394,16 +351,11 @@ def display_manga_grid():
                 mangas = searchComic(search)
     else:
         st.sidebar.header("Filter Komik")
-        filter_type = st.sidebar.multiselect(label="Pilih jenis komik:",
-                                            options= ["Semua", "manga", "manhwa", "manhua", "fantasy",
-                                            "isekai", "action", "adventure", "romance", "drama", 
-                                            "comedy", "school-life","shoujo", "cooking",
-                                            "harem", "historical", "horror", "martial-arts", 
-                                            "mecha", "mystery", "slice-of-life", "sports",
-                                            "tragedy", "supernatural", "webtoon"],
-                                            key="selected_filter"
-                                            )
-
+        filter_type = st.sidebar.selectbox(
+            "Pilih jenis komik:",
+            ["Semua", "manga", "manhwa", "manhua"],
+            key="selected_filter"
+        )
         
         order_type = "latest" 
         if filter_type != 'Semua':
@@ -449,23 +401,17 @@ def display_manga_grid():
         for i, manga in enumerate(mangas):
             with cols[i % 4]:
                 with st.container(border=True):
-                    # uses direct url   
+                    # Kembali menggunakan URL langsung
                     headers = {
-                                "User-Agent": (
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                    "Chrome/124.0.0.0 Safari/537.36"
-                                ),
-                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp",
-                                "Accept-Language": "en-US,en;q=0.9",
-                                "Referer": "https://www.mangaread.org/",
-                                "Connection": "keep-alive",
-                            }
+                                "User-Agent": "Mozilla/5.0",
+                                "Referer": "https://www.mangaread.org/"
+                              }
                     try:
-                        img_resp = requests.Session().get(manga["image"], headers=headers, timeout=30)
+                        img_resp = requests.get(manga["image"], headers=headers, timeout=30)
 
                         if img_resp.status_code != 200:
                             st.warning(f"⚠️ Cloudflare blocked image")
+                            
                         st.image(BytesIO(img_resp.content), use_container_width=True )
 
                     except Exception as e:
@@ -487,7 +433,7 @@ def display_manga_grid():
                     stars_str = "⭐" * full_stars + "☆" * empty_stars
                     st.markdown(f"<div style='text-align: center; color: orange;'>{stars_str} <small>({rating_val})</small></div>", unsafe_allow_html=True)
 
-                    button_text = f"Pilih" if st.session_state.current_filter else "Pilih Komik Ini"
+                    button_text = f"Pilih {st.session_state.current_filter.capitalize()}" if st.session_state.current_filter else "Pilih Komik Ini"
                     if st.button(button_text, key=manga['slug'], use_container_width=True):
                         st.session_state.selected_manga = manga
                         st.session_state.chapterlist = [] 
@@ -550,7 +496,7 @@ def main():
     if 'has_fetched_once' not in st.session_state: st.session_state.has_fetched_once = False
     if 'showing_profile' not in st.session_state: st.session_state.showing_profile = False
     if 'guest_bookmark' not in st.session_state: st.session_state.guest_bookmark = []
-    
+        
     if st.session_state.is_reading:
         display_reader_mode() 
     elif st.session_state.showing_profile:
